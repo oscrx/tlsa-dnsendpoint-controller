@@ -1,0 +1,37 @@
+{{ include "tlsa-dnsendpoint-controller.fullname" . }} is installed.
+
+Opt a Certificate in by annotating it:
+
+  kubectl -n <namespace> annotate certificate <name> \
+    {{ .Values.controller.annotationPrefix }}/enabled=true
+
+Optional annotations on the same Certificate:
+
+  {{ .Values.controller.annotationPrefix }}/ports          comma-separated, default 443
+  {{ .Values.controller.annotationPrefix }}/protocol       tcp (default), udp, sctp
+  {{ .Values.controller.annotationPrefix }}/usage          DANE-EE (default), DANE-TA, PKIX-EE, PKIX-TA
+  {{ .Values.controller.annotationPrefix }}/selector       SPKI (default) or FullCert
+  {{ .Values.controller.annotationPrefix }}/matching-type  SHA256 (default) or SHA512
+  {{ .Values.controller.annotationPrefix }}/ttl            seconds, default 300
+  {{ .Values.controller.annotationPrefix }}/dns-names      restrict which names get records
+
+A DNSEndpoint named <certificate>-tlsa then appears in the Certificate's
+namespace. Check what was produced with:
+
+  kubectl -n <namespace> get dnsendpoint <certificate>-tlsa -o yaml
+
+For those records to reach DNS, external-dns must be running with:
+
+  --source=crd
+  --managed-record-types=TLSA
+
+TLSA is not in the default managed set, so records are silently ignored without
+that second flag.
+
+{{ if not .Values.metrics.enabled }}Metrics are disabled.{{ else }}Metrics are served on :{{ .Values.metrics.port }}.{{ end }}
+{{- if and (gt (int .Values.replicaCount) 1) .Values.leaderElection.enabled }}
+
+Running {{ .Values.replicaCount }} replicas with leader election; only the leader reconciles.
+{{- end }}
+
+DANE also requires DNSSEC on the zone. Nothing here checks that.

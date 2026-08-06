@@ -130,3 +130,56 @@ jobs:
             -schema-location default \
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
             deploy/ examples/
+
+  chart:
+    name: Chart
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: azure/setup-helm@v5
+
+      - name: Install kubeconform
+        run: |
+          version=v0.6.7
+          curl -fsSL "https://github.com/yannh/kubeconform/releases/download/${version}/kubeconform-linux-amd64.tar.gz" \
+            | tar -xz -C /usr/local/bin kubeconform
+
+      - name: Lint
+        run: helm lint charts/tlsa-dnsendpoint-controller
+
+      - name: Render and validate the default values
+        run: |
+          helm template t charts/tlsa-dnsendpoint-controller \
+            | kubeconform -strict -summary -ignore-missing-schemas \
+                -schema-location default \
+                -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' -
+
+      - name: Render and validate with every optional feature enabled
+        run: |
+          helm template t charts/tlsa-dnsendpoint-controller \
+            --set replicaCount=2 \
+            --set leaderElection.enabled=true \
+            --set metrics.service.enabled=true \
+            --set metrics.serviceMonitor.enabled=true \
+            | kubeconform -strict -summary -ignore-missing-schemas \
+                -schema-location default \
+                -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' -
+
+      - name: Guards reject invalid configurations
+        # The chart fails fast on combinations that would misbehave at runtime.
+        # Assert they still do, so a template refactor cannot quietly drop them.
+        run: |
+          set +e
+          for args in \
+            "--set replicaCount=2" \
+            "--set controller.annotationPrefix=" \
+            "--set metrics.enabled=false --set metrics.serviceMonitor.enabled=true"
+          do
+            # shellcheck disable=SC2086
+            if helm template t charts/tlsa-dnsendpoint-controller $args >/dev/null 2>&1; then
+              echo "guard did not fire for: $args"
+              exit 1
+            fi
+            echo "guard fired for: $args"
+          done

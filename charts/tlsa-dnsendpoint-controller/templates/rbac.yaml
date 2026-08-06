@@ -1,0 +1,90 @@
+{{- include "tlsa-dnsendpoint-controller.validate" . -}}
+{{- if .Values.serviceAccount.create }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "tlsa-dnsendpoint-controller.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "tlsa-dnsendpoint-controller.labels" . | nindent 4 }}
+  {{- with .Values.serviceAccount.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- if .Values.rbac.create }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "tlsa-dnsendpoint-controller.fullname" . }}
+  labels:
+    {{- include "tlsa-dnsendpoint-controller.labels" . | nindent 4 }}
+rules:
+  # Certificates are the input. Read-only: this controller never writes to a
+  # resource cert-manager owns.
+  - apiGroups: ["cert-manager.io"]
+    resources: ["certificates"]
+    verbs: ["get", "list", "watch"]
+
+  # DNSEndpoints are the output.
+  - apiGroups: ["externaldns.k8s.io"]
+    resources: ["dnsendpoints"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Secrets hold the certificate and the next private key. "get" only: Secrets
+  # are read directly from the API server rather than cached, so no list/watch is
+  # needed and the controller never holds the cluster's secret material in memory.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "tlsa-dnsendpoint-controller.fullname" . }}
+  labels:
+    {{- include "tlsa-dnsendpoint-controller.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "tlsa-dnsendpoint-controller.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "tlsa-dnsendpoint-controller.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- if and .Values.rbac.create .Values.leaderElection.enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "tlsa-dnsendpoint-controller.fullname" . }}-leaderelection
+  namespace: {{ default .Release.Namespace .Values.leaderElection.namespace }}
+  labels:
+    {{- include "tlsa-dnsendpoint-controller.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "tlsa-dnsendpoint-controller.fullname" . }}-leaderelection
+  namespace: {{ default .Release.Namespace .Values.leaderElection.namespace }}
+  labels:
+    {{- include "tlsa-dnsendpoint-controller.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "tlsa-dnsendpoint-controller.fullname" . }}-leaderelection
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "tlsa-dnsendpoint-controller.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

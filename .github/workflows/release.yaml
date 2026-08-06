@@ -83,17 +83,64 @@ jobs:
           DIGEST: ${{ steps.push.outputs.digest }}
         run: cosign sign --yes "${IMAGE}@${DIGEST}"
 
+      - uses: azure/setup-helm@v5
+
+      - name: Package and push the chart
+        id: chart
+        # Only on tags: a manual dispatch publishes a moving image tag, but a
+        # chart version has to correspond to a release.
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          declared=$(helm show chart charts/tlsa-dnsendpoint-controller | awk '$1=="version:"{print $2}')
+          if [ "$declared" != "$version" ]; then
+            echo "Chart.yaml version ($declared) does not match the tag ($version); bump the chart before tagging."
+            exit 1
+          fi
+
+          helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin <<<"$GH_TOKEN"
+          helm package charts/tlsa-dnsendpoint-controller --destination dist
+          helm push "dist/tlsa-dnsendpoint-controller-${version}.tgz" \
+            "oci://ghcr.io/${{ github.repository_owner }}/charts" 2>&1 | tee push.log
+
+          digest=$(grep -oE 'sha256:[a-f0-9]{64}' push.log | head -1)
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+          echo "ref=ghcr.io/${{ github.repository_owner }}/charts/tlsa-dnsendpoint-controller" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Sign the chart
+        if: steps.chart.outputs.digest != ''
+        env:
+          REF: ${{ steps.chart.outputs.ref }}
+          DIGEST: ${{ steps.chart.outputs.digest }}
+        run: cosign sign --yes "${REF}@${DIGEST}"
+
       - name: Summary
         env:
           DIGEST: ${{ steps.push.outputs.digest }}
           TAGS: ${{ steps.meta.outputs.tags }}
+          CHART_REF: ${{ steps.chart.outputs.ref }}
+          CHART_VERSION: ${{ steps.chart.outputs.version }}
+          CHART_DIGEST: ${{ steps.chart.outputs.digest }}
         run: |
           {
-            echo "### Published"
+            echo "### Image"
             echo
             echo '```'
             echo "$TAGS"
             echo '```'
             echo
             echo "Digest: \`${DIGEST}\`"
+            if [ -n "$CHART_REF" ]; then
+              echo
+              echo "### Chart"
+              echo
+              echo '```'
+              echo "helm install tlsa oci://${CHART_REF} --version ${CHART_VERSION}"
+              echo '```'
+              echo
+              echo "Digest: \`${CHART_DIGEST}\`"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"

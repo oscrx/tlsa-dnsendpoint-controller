@@ -1,0 +1,111 @@
+image:
+  repository: ghcr.io/oscrx/tlsa-dnsendpoint-controller
+  # Defaults to the chart's appVersion when empty.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# More than one replica requires leaderElection.enabled, otherwise every replica
+# reconciles the same Certificates and they will fight over the DNSEndpoint.
+replicaCount: 1
+
+controller:
+  # Domain prefix for the annotations read from Certificates. Must be a DNS
+  # subdomain you control, since it becomes part of the annotation key.
+  annotationPrefix: tlsa.oscarr.nl
+
+  # How long a superseded TLSA record stays published after it stops matching
+  # the current certificate. Extra TLSA records do not break DANE validation,
+  # but removing one while a server still presents the old certificate does, so
+  # this errs long. Shorten it only if your workloads reload promptly.
+  rolloverGrace: 168h
+
+  # Interval at which all Certificates are reconciled even without a watch event.
+  resyncPeriod: 1h
+
+  # Restrict the controller to a single namespace. Empty means all namespaces.
+  namespace: ""
+
+  # key=value pairs passed through to the external-dns provider on every record.
+  # On Cloudflare, set external-dns.kubernetes.io/cloudflare-proxied=false if
+  # external-dns runs with --cloudflare-proxied, since TLSA cannot be proxied.
+  # Match external-dns's own --annotation-prefix if you have changed it.
+  providerSpecific: []
+  # - name: external-dns.kubernetes.io/cloudflare-proxied
+  #   value: "false"
+
+  # Extra CLI arguments, appended last.
+  extraArgs: []
+
+leaderElection:
+  enabled: false
+  # Defaults to the release namespace when empty.
+  namespace: ""
+
+rbac:
+  # The ClusterRole and ClusterRoleBinding. Certificates are watched
+  # cluster-wide, so these are required unless you manage RBAC yourself.
+  create: true
+
+serviceAccount:
+  create: true
+  # Defaults to the fullname template when empty.
+  name: ""
+  annotations: {}
+
+metrics:
+  enabled: true
+  port: 8080
+  service:
+    enabled: false
+    type: ClusterIP
+    port: 8080
+    annotations: {}
+  # Requires the Prometheus Operator CRDs. Implies service.enabled.
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    scrapeTimeout: ""
+    labels: {}
+    relabelings: []
+    metricRelabelings: []
+
+healthProbe:
+  port: 8081
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 64Mi
+  limits:
+    memory: 128Mi
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+logging:
+  # One of debug, info, error.
+  level: info
+  # One of json, console.
+  format: json
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []
+priorityClassName: ""
+
+podAnnotations: {}
+podLabels: {}
+
+# Extra objects to render alongside the chart, e.g. a Certificate to manage.
+extraObjects: []

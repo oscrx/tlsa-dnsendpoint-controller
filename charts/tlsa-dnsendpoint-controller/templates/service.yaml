@@ -1,0 +1,22 @@
+{{- if and .Values.metrics.enabled (or .Values.metrics.service.enabled .Values.metrics.serviceMonitor.enabled) }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "tlsa-dnsendpoint-controller.fullname" . }}-metrics
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "tlsa-dnsendpoint-controller.labels" . | nindent 4 }}
+  {{- with .Values.metrics.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.metrics.service.type }}
+  selector:
+    {{- include "tlsa-dnsendpoint-controller.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: metrics
+      port: {{ .Values.metrics.service.port }}
+      targetPort: metrics
+      protocol: TCP
+{{- end }}

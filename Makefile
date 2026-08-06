@@ -35,7 +35,7 @@ lint: ## Run golangci-lint
 	golangci-lint run --timeout=5m ./...
 
 .PHONY: verify
-verify: vet lint test ## Everything CI runs
+verify: vet lint test chart.verify ## Everything CI runs
 
 .PHONY: image
 image: ## Build a single-platform image for the host
@@ -52,3 +52,29 @@ manifests: ## Print the deployment manifests
 .PHONY: clean
 clean: ## Remove build artefacts
 	rm -rf build coverage.out
+
+CHART       ?= charts/tlsa-dnsendpoint-controller
+CHART_REPO  ?= oci://ghcr.io/oscrx/charts
+
+.PHONY: chart.lint
+chart.lint: ## Lint the Helm chart
+	helm lint $(CHART)
+
+.PHONY: chart.template
+chart.template: ## Render the chart with default values
+	helm template tlsa $(CHART)
+
+.PHONY: chart.verify
+chart.verify: chart.lint ## Lint, render and schema-validate the chart
+	helm template tlsa $(CHART) | kubeconform -strict -summary -ignore-missing-schemas \
+		-schema-location default \
+		-schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' -
+	helm template tlsa $(CHART) --set replicaCount=2 --set leaderElection.enabled=true \
+		--set metrics.service.enabled=true --set metrics.serviceMonitor.enabled=true \
+		| kubeconform -strict -summary -ignore-missing-schemas \
+			-schema-location default \
+			-schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' -
+
+.PHONY: chart.package
+chart.package: ## Package the chart into dist/
+	helm package $(CHART) --destination dist

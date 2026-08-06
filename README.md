@@ -171,13 +171,35 @@ Nothing here checks that for you.
 
 ## Installation
 
+### Helm (recommended)
+
+The chart is published as an OCI artifact:
+
+```bash
+helm install tlsa oci://ghcr.io/oscrx/charts/tlsa-dnsendpoint-controller \
+  --version 0.1.0 \
+  --namespace cert-manager
+```
+
+See [charts/tlsa-dnsendpoint-controller](charts/tlsa-dnsendpoint-controller) for
+the values. The chart refuses configurations that would misbehave at runtime —
+more than one replica without leader election, an empty annotation prefix, a
+ServiceMonitor without metrics — rather than letting you discover them from logs.
+
+### Plain manifests
+
+Without Helm:
+
 ```bash
 kubectl apply -f deploy/rbac.yaml
 kubectl apply -f deploy/deployment.yaml
 ```
 
-The Deployment references `ghcr.io/oscrx/tlsa-dnsendpoint-controller:latest`.
-Build and push it with your own tooling; the module has no build magic:
+These are the minimal equivalent of the chart's defaults, maintained by hand, so
+prefer the chart if you want to change anything.
+
+The Deployment references `ghcr.io/oscrx/tlsa-dnsendpoint-controller:0.1.0`,
+published multi-arch and cosign-signed by the release workflow. To build locally:
 
 ```bash
 go build -o tlsa-dnsendpoint-controller .
