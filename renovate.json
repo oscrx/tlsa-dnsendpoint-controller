@@ -1,0 +1,36 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":automergeMinor",
+    ":semanticCommits"
+  ],
+  "// automerge safety": "Status checks are deliberately NOT skipped here. This repo has a real test suite, so CI passing is the only thing standing between an automerged bump and a broken controller. platformAutomerge is off so Renovate merges only once the branch is green; GitHub's own auto-merge would land the PR immediately while no branch protection requires the checks.",
+  "platformAutomerge": false,
+  "packageRules": [
+    {
+      "description": "The Kubernetes libraries are released together and will not compile apart, so update them as one PR.",
+      "groupName": "kubernetes",
+      "matchPackageNames": [
+        "k8s.io/**",
+        "sigs.k8s.io/controller-runtime",
+        "github.com/cert-manager/cert-manager"
+      ]
+    },
+    {
+      "description": "These modules use 0.x versions, where a minor bump is a Kubernetes release and routinely needs code changes. Review them rather than automerging, even though CI would catch an outright break.",
+      "matchPackageNames": [
+        "k8s.io/**",
+        "sigs.k8s.io/controller-runtime"
+      ],
+      "matchUpdateTypes": ["minor"],
+      "automerge": false
+    },
+    {
+      "description": "Action and base-image digests are safe to take unattended once CI is green.",
+      "matchManagers": ["github-actions", "dockerfile"],
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "automerge": true
+    }
+  ]
+}
