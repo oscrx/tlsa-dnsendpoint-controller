@@ -177,7 +177,7 @@ The chart is published as an OCI artifact:
 
 ```bash
 helm install tlsa oci://ghcr.io/oscrx/charts/tlsa-dnsendpoint-controller \
-  --version 0.1.0 \
+  --version 0.2.0 \
   --namespace cert-manager
 ```
 
@@ -198,7 +198,7 @@ kubectl apply -f deploy/deployment.yaml
 These are the minimal equivalent of the chart's defaults, maintained by hand, so
 prefer the chart if you want to change anything.
 
-The Deployment references `ghcr.io/oscrx/tlsa-dnsendpoint-controller:0.1.0`,
+The Deployment references `ghcr.io/oscrx/tlsa-dnsendpoint-controller:0.2.0`,
 published multi-arch and cosign-signed by the release workflow. To build locally:
 
 ```bash
