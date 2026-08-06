@@ -65,7 +65,7 @@ jobs:
       # version is pinned rather than "latest" because the binary must be built
       # with a Go at least as new as the go directive in go.mod, and "latest"
       # gives no control over that.
-      - uses: golangci/golangci-lint-action@v8
+      - uses: golangci/golangci-lint-action@v9
         with:
           version: v2.11.4
           args: --timeout=5m
