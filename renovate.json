@@ -5,7 +5,10 @@
     ":automergeMinor",
     ":semanticCommits"
   ],
-  "// automerge safety": "Status checks are deliberately NOT skipped here. This repo has a real test suite, so CI passing is the only thing standing between an automerged bump and a broken controller. platformAutomerge is off so Renovate merges only once the branch is green; GitHub's own auto-merge would land the PR immediately while no branch protection requires the checks.",
+  "description": [
+    "Status checks are deliberately NOT skipped. This repo has a real test suite, so CI passing is the only thing standing between an automerged bump and a broken controller.",
+    "platformAutomerge is off so Renovate merges only once the branch is green. GitHub's own auto-merge would land the PR as soon as it is mergeable, because no branch protection marks the checks as required."
+  ],
   "platformAutomerge": false,
   "packageRules": [
     {

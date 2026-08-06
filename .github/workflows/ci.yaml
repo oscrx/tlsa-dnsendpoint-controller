@@ -91,6 +91,17 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  renovate-config:
+    name: Validate Renovate config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Renovate rejects unknown keys and stops raising PRs entirely when its
+      # config is invalid, which is silent unless you go looking. Catch it here.
+      - name: Validate
+        run: npx --yes --package renovate renovate-config-validator --strict renovate.json
+
   manifests:
     name: Validate manifests
     runs-on: ubuntu-latest
