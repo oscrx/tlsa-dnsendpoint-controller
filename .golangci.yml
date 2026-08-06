@@ -1,0 +1,43 @@
+version: "2"
+
+linters:
+  enable:
+    - errorlint      # correct error wrapping and comparison
+    - gocritic       # broad correctness and style checks
+    - misspell
+    - nolintlint     # no bare or unexplained nolint directives
+    - revive
+    - testifylint    # correct assert/require usage
+    - unconvert
+    - usestdlibvars
+    - whitespace
+
+  settings:
+    revive:
+      rules:
+        - name: exported
+          # Exported identifiers are documented; this project is small enough
+          # that keeping that true is cheap.
+          severity: warning
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+      disabled-checks:
+        # Reads worse than the explicit if/else it would replace in the cases
+        # this project has.
+        - ifElseChain
+
+  exclusions:
+    rules:
+      # Table-driven tests legitimately carry long literal blocks.
+      - path: _test\.go
+        linters:
+          - gocritic
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

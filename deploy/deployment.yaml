@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tlsa-dnsendpoint-controller
+  namespace: cert-manager
+  labels:
+    app.kubernetes.io/name: tlsa-dnsendpoint-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tlsa-dnsendpoint-controller
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tlsa-dnsendpoint-controller
+    spec:
+      serviceAccountName: tlsa-dnsendpoint-controller
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: controller
+          image: ghcr.io/oscrx/tlsa-dnsendpoint-controller:0.1.0
+          args:
+            - --metrics-bind-address=:8080
+            - --health-probe-bind-address=:8081
+            # Keep a superseded record published for a week. Extra TLSA records
+            # never break DANE validation; removing one while a server still
+            # presents the old certificate does. Shorten only if you are
+            # confident your workloads reload promptly on renewal.
+            - --rollover-grace=168h
+            - --resync-period=1h
+            # Cloudflare: TLSA records cannot be proxied, and external-dns does
+            # not know that. Uncomment if external-dns runs with
+            # --cloudflare-proxied. Match its --annotation-prefix if customised.
+            # - --provider-specific=external-dns.kubernetes.io/cloudflare-proxied=false
+          ports:
+            - name: metrics
+              containerPort: 8080
+            - name: probes
+              containerPort: 8081
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: probes
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: probes
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]

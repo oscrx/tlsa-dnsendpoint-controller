@@ -1,0 +1,70 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tlsa-dnsendpoint-controller
+  namespace: cert-manager
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: tlsa-dnsendpoint-controller
+rules:
+  # Certificates are the input. Read-only: this controller never writes to a
+  # resource cert-manager owns.
+  - apiGroups: ["cert-manager.io"]
+    resources: ["certificates"]
+    verbs: ["get", "list", "watch"]
+
+  # DNSEndpoints are the output.
+  - apiGroups: ["externaldns.k8s.io"]
+    resources: ["dnsendpoints"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Secrets hold the certificate and the next private key. "get" only — Secrets
+  # are read directly from the API server rather than cached, so no list/watch is
+  # needed and the controller never holds the cluster's secret material in memory.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: tlsa-dnsendpoint-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: tlsa-dnsendpoint-controller
+subjects:
+  - kind: ServiceAccount
+    name: tlsa-dnsendpoint-controller
+    namespace: cert-manager
+---
+# Leader election lease, only needed when running more than one replica.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: tlsa-dnsendpoint-controller-leaderelection
+  namespace: cert-manager
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: tlsa-dnsendpoint-controller-leaderelection
+  namespace: cert-manager
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: tlsa-dnsendpoint-controller-leaderelection
+subjects:
+  - kind: ServiceAccount
+    name: tlsa-dnsendpoint-controller
+    namespace: cert-manager

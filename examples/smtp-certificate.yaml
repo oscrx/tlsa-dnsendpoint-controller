@@ -1,0 +1,82 @@
+# A mail server certificate with TLSA records on the SMTP ports.
+#
+# With the defaults (DANE-EE / SPKI / SHA-256) this publishes:
+#   _25._tcp.mail.example.com  IN TLSA 3 1 1 <sha256 of the SPKI>
+#   _465._tcp.mail.example.com IN TLSA 3 1 1 <same digest>
+#   _587._tcp.mail.example.com IN TLSA 3 1 1 <same digest>
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mail
+  namespace: mail
+  annotations:
+    tlsa.oscarr.nl/enabled: "true"
+    tlsa.oscarr.nl/ports: "25,465,587"
+spec:
+  secretName: mail-tls
+  dnsNames:
+    - mail.example.com
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+---
+# Plain HTTPS: every default applies, so opting in is the whole configuration.
+# Publishes _443._tcp.www.example.com and _443._tcp.example.com.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: web
+  namespace: web
+  annotations:
+    tlsa.oscarr.nl/enabled: "true"
+spec:
+  secretName: web-tls
+  dnsNames:
+    - example.com
+    - www.example.com
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+---
+# DANE-TA against an internal CA, pinning the issuer rather than the leaf.
+#
+# The digest is taken from the intermediate in tls.crt when there is one, and
+# from ca.crt otherwise. Because the CA key does not change when the leaf is
+# renewed, this record is stable across renewals — but it also cannot be
+# pre-published, since there is nothing new to announce.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: internal-api
+  namespace: platform
+  annotations:
+    tlsa.oscarr.nl/enabled: "true"
+    tlsa.oscarr.nl/usage: DANE-TA
+    tlsa.oscarr.nl/ports: "8443"
+    tlsa.oscarr.nl/ttl: "3600"
+spec:
+  secretName: internal-api-tls
+  dnsNames:
+    - api.internal.example.com
+  issuerRef:
+    name: internal-ca
+    kind: ClusterIssuer
+---
+# A certificate covering several names where only some should get TLSA records.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: multi
+  namespace: web
+  annotations:
+    tlsa.oscarr.nl/enabled: "true"
+    tlsa.oscarr.nl/dns-names: "secure.example.com"
+spec:
+  secretName: multi-tls
+  dnsNames:
+    - example.com
+    - www.example.com
+    - secure.example.com
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
