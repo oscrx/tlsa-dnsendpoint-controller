@@ -61,9 +61,13 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - uses: golangci/golangci-lint-action@v6
+      # v8 is the action line that understands golangci-lint v2 configs. The
+      # version is pinned rather than "latest" because the binary must be built
+      # with a Go at least as new as the go directive in go.mod, and "latest"
+      # gives no control over that.
+      - uses: golangci/golangci-lint-action@v8
         with:
-          version: latest
+          version: v2.11.4
           args: --timeout=5m
 
   build:
@@ -93,9 +97,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Client-side validation
+      # kubeconform validates against JSON schemas and needs no cluster, unlike
+      # `kubectl --dry-run=client`, which still performs API discovery.
+      - name: Install kubeconform
         run: |
-          for f in deploy/*.yaml examples/*.yaml; do
-            echo "== $f"
-            kubectl apply --dry-run=client --validate=false -f "$f" >/dev/null
-          done
+          version=v0.6.7
+          curl -fsSL "https://github.com/yannh/kubeconform/releases/download/${version}/kubeconform-linux-amd64.tar.gz" \
+            | tar -xz -C /usr/local/bin kubeconform
+          kubeconform -v
+
+      - name: Validate
+        # Built-in kinds are checked strictly. The custom resources in examples/
+        # are checked against the community CRD catalogue where it has a schema,
+        # and skipped where it does not — external-dns's DNSEndpoint is not
+        # published there, and failing on that would make this job useless.
+        run: |
+          kubeconform \
+            -strict \
+            -summary \
+            -ignore-missing-schemas \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+            deploy/ examples/
