@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # A release must never ship something that does not pass its own tests.
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
