@@ -3,7 +3,7 @@ module github.com/oscrx/tlsa-dnsendpoint-controller
 go 1.26.5
 
 require (
-	github.com/cert-manager/cert-manager v1.18.2
+	github.com/cert-manager/cert-manager v1.18.5
 	github.com/go-logr/logr v1.4.3
 	github.com/miekg/dns v1.1.72
 	k8s.io/api v0.36.0
