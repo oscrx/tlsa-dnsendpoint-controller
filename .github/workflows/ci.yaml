@@ -19,9 +19,9 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           # Single source of truth: the toolchain comes from go.mod.
           go-version-file: go.mod
@@ -54,18 +54,18 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
 
-      # v8 is the action line that understands golangci-lint v2 configs. The
-      # version is pinned rather than "latest" because the binary must be built
-      # with a Go at least as new as the go directive in go.mod, and "latest"
-      # gives no control over that.
-      - uses: golangci/golangci-lint-action@v8
+      # The action line must understand golangci-lint v2 configs (v6 does not).
+      # The version is pinned rather than "latest" because the binary must be
+      # built with a Go at least as new as the go directive in go.mod, and
+      # "latest" gives no control over that.
+      - uses: golangci/golangci-lint-action@v9
         with:
           version: v2.11.4
           args: --timeout=5m
@@ -74,16 +74,16 @@ jobs:
     name: Build image
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-qemu-action@v4
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       # Build both platforms to catch a cross-compilation break, but do not push
       # from CI — publishing happens only from release.yaml.
       - name: Build (no push)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -95,7 +95,7 @@ jobs:
     name: Validate manifests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # kubeconform validates against JSON schemas and needs no cluster, unlike
       # `kubectl --dry-run=client`, which still performs API discovery.
