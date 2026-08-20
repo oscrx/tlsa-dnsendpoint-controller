@@ -7,7 +7,7 @@ maintaining an external-dns `DNSEndpoint`.
 
 ```sh
 helm install tlsa oci://ghcr.io/oscrx/charts/tlsa-dnsendpoint-controller \
-  --version 0.2.1 \
+  --version 0.2.2 \
   --namespace cert-manager
 ```
 
