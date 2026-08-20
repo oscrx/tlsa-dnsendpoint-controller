@@ -19,9 +19,11 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           # Single source of truth: the toolchain comes from go.mod.
           go-version-file: go.mod
@@ -54,9 +56,11 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod
           cache: true
@@ -69,26 +73,48 @@ jobs:
       # this repo moves to a new Go before upstream cuts a release. Building
       # from source costs about a minute and cannot fall behind.
       # The version stays pinned for reproducibility.
-      - uses: golangci/golangci-lint-action@v9
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
         with:
           version: v2.13.0
           install-mode: goinstall
           args: --timeout=5m
 
+  workflows:
+    name: Audit workflows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Findings are uploaded as SARIF so they land in the Security tab rather
+      # than only in a log nobody reads after the job goes green.
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      # Static analysis of the workflows themselves. Renovate keeps action
+      # digests current, but nothing else inspects what the workflows actually
+      # do: shell injection through ${{ }} interpolation, the checkout token
+      # persisting into later steps, caches writable by lower-privileged
+      # workflows, over-broad permissions.
+      - uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
+
   build:
     name: Build image
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
-      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
 
-      - uses: docker/setup-buildx-action@v4
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
 
       # Build both platforms to catch a cross-compilation break, but do not push
       # from CI — publishing happens only from release.yaml.
       - name: Build (no push)
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -100,7 +126,9 @@ jobs:
     name: Validate Renovate config
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       # Renovate rejects unknown keys and stops raising PRs entirely when its
       # config is invalid, which is silent unless you go looking. Catch it here.
@@ -111,7 +139,9 @@ jobs:
     name: Validate manifests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       # kubeconform validates against JSON schemas and needs no cluster, unlike
       # `kubectl --dry-run=client`, which still performs API discovery.
@@ -140,9 +170,11 @@ jobs:
     name: Chart
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
-      - uses: azure/setup-helm@v5
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5
 
       - name: Install kubeconform
         run: |
