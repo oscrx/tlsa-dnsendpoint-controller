@@ -5,7 +5,7 @@ go 1.26.5
 require (
 	github.com/cert-manager/cert-manager v1.21.1
 	github.com/go-logr/logr v1.4.4
-	github.com/miekg/dns v1.1.72
+	github.com/miekg/dns v1.1.73
 	k8s.io/api v0.36.3
 	k8s.io/apimachinery v0.36.3
 	k8s.io/client-go v0.36.3
