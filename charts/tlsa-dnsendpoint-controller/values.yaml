@@ -2,6 +2,10 @@ image:
   repository: ghcr.io/oscrx/tlsa-dnsendpoint-controller
   # Defaults to the chart's appVersion when empty.
   tag: ""
+  # Set by the release workflow to the digest of the image published for this
+  # chart version, and takes precedence over tag. Empty in the repository
+  # because the digest does not exist until the image has been pushed.
+  digest: ""
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
