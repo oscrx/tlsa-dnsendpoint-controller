@@ -62,12 +62,17 @@ jobs:
           cache: true
 
       # The action line must understand golangci-lint v2 configs (v6 does not).
-      # The version is pinned rather than "latest" because the binary must be
-      # built with a Go at least as new as the go directive in go.mod, and
-      # "latest" gives no control over that.
+      # goinstall builds the linter from source with this repo's own toolchain.
+      # The prebuilt release binaries are compiled with whatever Go was current
+      # when that release was cut, and golangci-lint refuses to run when that is
+      # older than the go directive in go.mod, which breaks the job every time
+      # this repo moves to a new Go before upstream cuts a release. Building
+      # from source costs about a minute and cannot fall behind.
+      # The version stays pinned for reproducibility.
       - uses: golangci/golangci-lint-action@v9
         with:
           version: v2.13.0
+          install-mode: goinstall
           args: --timeout=5m
 
   build:
