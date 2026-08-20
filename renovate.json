@@ -38,6 +38,11 @@
       "matchManagers": ["github-actions", "dockerfile"],
       "matchUpdateTypes": ["minor", "patch", "digest"],
       "automerge": true
+    },
+    {
+      "description": "The chart's image.tag is empty on purpose so it follows appVersion. A digest written there renders as repo:@sha256:..., which is not a valid reference. Pinning the chart to a digest has to happen at release time anyway, because the digest does not exist until the image is pushed.",
+      "matchManagers": ["helm-values"],
+      "pinDigests": false
     }
   ]
 }
