@@ -1,7 +1,7 @@
 image:
   repository: ghcr.io/oscrx/tlsa-dnsendpoint-controller
   # Defaults to the chart's appVersion when empty.
-  tag: ""
+  tag: "@sha256:88bd5e10b1066a4317c881cbad5df4bf8dd6947346b43335b15661dd01b85f5b"
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
