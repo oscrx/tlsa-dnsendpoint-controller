@@ -15,7 +15,7 @@ ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
     go build -trimpath -ldflags="-s -w" -o /out/tlsa-dnsendpoint-controller .
 
-FROM gcr.io/distroless/static:nonroot@sha256:f7f8f729987ad0fdf6b05eeeae94b26e6a0f613bdf46feea7fc40f7bd72953e6
+FROM gcr.io/distroless/static:nonroot@sha256:1c2c046bc09ed40fad370b599a0b1ae7987f55b01e247cf27a7c27cd97e5bbc7
 COPY --from=build /out/tlsa-dnsendpoint-controller /tlsa-dnsendpoint-controller
 USER 65532:65532
 ENTRYPOINT ["/tlsa-dnsendpoint-controller"]
