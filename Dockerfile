@@ -1,7 +1,7 @@
 # Cross-compiles rather than emulating: the build stage always runs on the
 # builder's native architecture and Go emits a binary for the target. Building
 # an amd64 image on an arm64 Mac therefore costs nothing extra.
-FROM --platform=$BUILDPLATFORM golang:1.27@sha256:65b6f280bf050ec5af12716857e8ea8439d694dbba8f31ceeb7630670071f2bb AS build
+FROM --platform=$BUILDPLATFORM golang:1.27@sha256:0ecdc2a9f6156af6451080bfe3d8382a662fcc4e209608c6f919e643453514c1 AS build
 WORKDIR /src
 
 COPY go.mod go.sum ./
