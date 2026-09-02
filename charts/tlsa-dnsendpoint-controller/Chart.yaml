@@ -3,8 +3,8 @@ name: tlsa-dnsendpoint-controller
 description: Publishes TLSA (DANE) records for cert-manager Certificates via external-dns DNSEndpoint resources
 type: application
 # Chart version tracks the application release; they are bumped together.
-version: 0.2.3
-appVersion: "0.2.3"
+version: 0.2.4
+appVersion: "0.2.4"
 kubeVersion: ">=1.25.0-0"
 home: https://github.com/oscrx/tlsa-dnsendpoint-controller
 sources:
@@ -23,7 +23,7 @@ annotations:
   artifacthub.io/prerelease: "false"
   artifacthub.io/images: |
     - name: tlsa-dnsendpoint-controller
-      image: ghcr.io/oscrx/tlsa-dnsendpoint-controller:0.2.3
+      image: ghcr.io/oscrx/tlsa-dnsendpoint-controller:0.2.4
   artifacthub.io/links: |
     - name: source
       url: https://github.com/oscrx/tlsa-dnsendpoint-controller

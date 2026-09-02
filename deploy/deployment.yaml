@@ -22,7 +22,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: controller
-          image: ghcr.io/oscrx/tlsa-dnsendpoint-controller:0.2.2
+          image: ghcr.io/oscrx/tlsa-dnsendpoint-controller:0.2.4
           args:
             - --metrics-bind-address=:8080
             - --health-probe-bind-address=:8081
