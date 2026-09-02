@@ -94,7 +94,7 @@ func (r *CertificateReconciler) now() time.Time {
 // +kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;list;watch
 // +kubebuilder:rbac:groups=externaldns.k8s.io,resources=dnsendpoints,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get
-// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups="";events.k8s.io,resources=events,verbs=create;patch
 
 // Reconcile brings the DNSEndpoint for a Certificate in line with the
 // Certificate's current (and imminent) key material.
