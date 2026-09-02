@@ -11,9 +11,11 @@
     "Status checks are deliberately NOT skipped. This repo has a real test suite, so CI passing is the only thing standing between an automerged bump and a broken controller.",
     "platformAutomerge is off so Renovate merges only once the branch is green. GitHub's own auto-merge would land the PR as soon as it is mergeable, because no branch protection marks the checks as required.",
     "Actions are pinned to commit SHAs. A tag like v7 is mutable, so a compromised or retagged action would land in this pipeline without any config change here. Renovate keeps the SHAs current and writes the human-readable version alongside as a comment.",
-    "Base images are pinned to digests for the same reason. golang:1.27 and distroless static:nonroot are both rolling tags, so the bytes behind them change without any commit here. Pinning makes each move a reviewable PR that CI has to pass."
+    "Base images are pinned to digests for the same reason. golang:1.27 and distroless static:nonroot are both rolling tags, so the bytes behind them change without any commit here. Pinning makes each move a reviewable PR that CI has to pass.",
+    "gomodTidy is required because Renovate updates go.mod and go.sum with go get, which adds entries but never prunes them. A bump that drops a transitive dependency leaves a stale require and orphaned go.sum lines behind, and CI fails on the tidy check before it ever runs a test."
   ],
   "platformAutomerge": false,
+  "postUpdateOptions": ["gomodTidy"],
   "packageRules": [
     {
       "description": "The Kubernetes libraries are released together and will not compile apart, so update them as one PR.",
