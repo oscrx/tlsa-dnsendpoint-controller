@@ -13,17 +13,22 @@ helm install tlsa oci://ghcr.io/oscrx/charts/tlsa-dnsendpoint-controller \
 
 ## Requirements
 
-- cert-manager.
-- external-dns running with `--source=crd` **and `--managed-record-types=TLSA`**.
-  TLSA is not in the default managed set, so records are silently ignored
-  without that flag.
-- On Cloudflare, an external-dns build carrying
-  [external-dns#6616](https://github.com/kubernetes-sigs/external-dns/pull/6616),
-  which is open at the time of writing. A stock build rejects TLSA writes with
-  `usage is a required data field`. See the project README for the detail.
-- The external-dns `DNSEndpoint` CRD.
-- DNSSEC on the zone. Without it TLSA records authenticate nothing; the chart
-  does not check.
+| Component | Required | Notes |
+| --- | --- | --- |
+| Kubernetes | ≥ 1.25 | Declared as `kubeVersion` in `Chart.yaml`. |
+| cert-manager | any recent release | Uses the `cert-manager.io/v1` `Certificate` API. |
+| external-dns | **≥ v0.23.0** | TLSA support landed in [external-dns#6616](https://github.com/kubernetes-sigs/external-dns/pull/6616). Earlier versions cannot read TLSA records back, and on Cloudflare reject writes with `usage is a required data field`. |
+| `DNSEndpoint` CRD | `externaldns.k8s.io/v1alpha1` | Installed automatically by the official external-dns Helm chart. Other install methods may not — check with `kubectl get crd dnsendpoints.externaldns.k8s.io`. |
+
+external-dns must run with `--source=crd` **and `--managed-record-types=TLSA`**.
+TLSA is not in the default managed set, so records are silently ignored without
+that flag.
+
+DNSSEC must be enabled on the zone. Without it TLSA records authenticate
+nothing; the chart does not check.
+
+See the [project README](https://github.com/oscrx/tlsa-dnsendpoint-controller#provider-support)
+for per-provider detail and troubleshooting.
 
 ## Usage
 

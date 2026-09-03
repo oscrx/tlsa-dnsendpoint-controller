@@ -8,12 +8,62 @@ the certificate lifecycle but has no way to write DNS records outside ACME
 challenges, and external-dns owns ~50 DNS providers but cannot derive a record's
 contents from certificate material. This controller sits between them.
 
-```
-Certificate ──> [this controller] ──> DNSEndpoint ──> external-dns ──> your DNS provider
-   (cert-manager)                       (crd source)
+```mermaid
+flowchart LR
+    C["<b>Certificate</b><br/><i>cert-manager</i>"]
+    T["<b>tlsa-dnsendpoint-controller</b><br/><i>reads the key, computes the digest</i>"]
+    D["<b>DNSEndpoint</b><br/><i>externaldns.k8s.io</i>"]
+    E["<b>external-dns</b><br/><i>--source=crd</i>"]
+    P[("<b>your DNS zone</b><br/><i>TLSA records</i>")]
+
+    C --> T --> D --> E --> P
 ```
 
-Related upstream discussion: [cert-manager#6472](https://github.com/cert-manager/cert-manager/issues/6472).
+You annotate a Certificate; TLSA records appear in DNS and stay correct across
+renewals, including the window where the key changes.
+
+> **Requires external-dns v0.23.0 or newer.** TLSA support landed in
+> [external-dns#6616](https://github.com/kubernetes-sigs/external-dns/pull/6616).
+> Earlier versions cannot read TLSA records back, and on Cloudflare cannot write
+> them at all. See [Supported versions](#supported-versions).
+
+## Quickstart
+
+```bash
+# 1. Check for the DNSEndpoint CRD. The official external-dns Helm chart
+#    installs it for you; other install methods often do not.
+kubectl get crd dnsendpoints.externaldns.k8s.io
+
+# 2. Only if that came back NotFound:
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/external-dns/master/config/crd/standard/dnsendpoints.externaldns.k8s.io.yaml
+
+# 3. This controller.
+helm install tlsa oci://ghcr.io/oscrx/charts/tlsa-dnsendpoint-controller \
+  --version 0.2.4 \
+  --namespace cert-manager
+```
+
+external-dns must be running with `--source=crd` **and**
+`--managed-record-types=TLSA`. The default managed set is A/AAAA/CNAME only, so
+without that flag your records are silently ignored.
+
+Then annotate a Certificate:
+
+```yaml
+metadata:
+  annotations:
+    tlsa.oscarr.nl/enabled: "true"
+    tlsa.oscarr.nl/ports: "25,465,587"
+```
+
+And check what landed:
+
+```bash
+kubectl get dnsendpoint mail-tlsa -o yaml
+dig +dnssec TLSA _25._tcp.mail.example.com
+```
+
+If nothing appears, start at [Troubleshooting](#troubleshooting).
 
 ## What it does
 
@@ -26,6 +76,8 @@ deliberate design choice: **no finalizer is involved anywhere**, so deleting a
 Certificate can never block on DNS being reachable — Kubernetes garbage
 collection removes the `DNSEndpoint`, and external-dns withdraws the records on
 its next sync.
+
+Related upstream discussion: [cert-manager#6472](https://github.com/cert-manager/cert-manager/issues/6472).
 
 ## Renewal safety
 
@@ -57,67 +109,116 @@ an extra TLSA record is harmless: DANE succeeds if *any* record matches.
 Removing one too early is what breaks validation. So the default errs long.
 Retirement state is tracked in an annotation on the `DNSEndpoint`.
 
-## Requirements
+## Supported versions
 
-- cert-manager, any recent version.
-- external-dns running with `--source=crd` and `--managed-record-types=TLSA`.
-  The default managed set is A/AAAA/CNAME only, so **TLSA records are silently
-  ignored without that flag**.
-- The external-dns `DNSEndpoint` CRD installed:
-  `kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/external-dns/master/config/crd/standard/dnsendpoints.externaldns.k8s.io.yaml`
-- **A DNS provider whose external-dns implementation supports TLSA.** See the
-  caveat below — this is the part most likely to bite you, and on Cloudflare it
-  needs [external-dns#6616](https://github.com/kubernetes-sigs/external-dns/pull/6616),
-  which is open at the time of writing.
-- DNSSEC on the zone. Without it, DANE offers nothing; nothing here checks.
+| Component | Required | Notes |
+|---|---|---|
+| Kubernetes | ≥ 1.25 | The chart declares `kubeVersion: ">=1.25.0-0"`. |
+| cert-manager | any recent release | Uses the `cert-manager.io/v1` `Certificate` API. |
+| external-dns | **≥ v0.23.0** | TLSA support landed in [#6616](https://github.com/kubernetes-sigs/external-dns/pull/6616). Must run `--source=crd --managed-record-types=TLSA`. See [Provider support](#provider-support). |
+| `DNSEndpoint` CRD | `externaldns.k8s.io/v1alpha1` | The official external-dns Helm chart installs it automatically. Other install methods may not — check with `kubectl get crd dnsendpoints.externaldns.k8s.io`. |
 
-### Upstream status
+DNSSEC must be enabled on the zone. Without it, DANE authenticates nothing —
+and nothing here checks that for you.
 
-Released external-dns does not yet handle TLSA end to end. The gaps are
-understood and fixed by
-[external-dns#6616](https://github.com/kubernetes-sigs/external-dns/pull/6616),
-which covers Cloudflare's write path, the read filter, ownership tracking and
-proxy handling. Until that merges you need a build carrying it — the sections
-below explain each gap, because they are what you will observe on a stock build
-and what the PR is for.
+## Provider support
 
-The rfc2136 provider is closer to working untouched: it formats presentation
-syntax and hands it to `dns.NewRR`, so writes succeed, but reads are still
-filtered out.
+TLSA reached external-dns in
+[#6616](https://github.com/kubernetes-sigs/external-dns/pull/6616), released in
+**v0.23.0** — but that fix is narrower than "external-dns supports TLSA now".
+The shared read filter in `provider/recordfilter.go` still allows only
+`A, AAAA, CNAME, DNAME, SRV, TXT, NS`. Cloudflare works because it overrides
+that filter for itself. Any provider using the shared filter unchanged still
+drops TLSA records when reading the zone back.
 
-To run a build carrying the patch before it merges:
+| Provider | TLSA on v0.23.0 | Why |
+|---|---|---|
+| **Cloudflare** | **Works** — verified end to end | Overrides the shared filter, and #6616 added its structured write path |
+| **PowerDNS** | **Should work** — untested | Passes the record type through as an opaque string on read and write, with no allowlist |
+| **Webhook providers** | Depends on the provider | external-dns applies no type filter of its own; behaviour is entirely the out-of-tree provider's |
+| **rfc2136** | Not yet | Writes succeed via `dns.NewRR`, but its own read switch silently drops any type it does not name |
+| Route53, Azure, Google Cloud DNS, Alibaba Cloud, Civo, DNSimple, GoDaddy, Linode, NS1, OCI, OVH, Scaleway | Not yet | Use the shared filter. Several add MX or NAPTR for themselves; none add TLSA |
+| CoreDNS, Pi-hole, Exoscale | Not yet | Handle a small fixed set of types in their own code, roughly A/AAAA/CNAME/TXT |
+| AWS Cloud Map | No | Service discovery rather than a DNS zone API; TLSA has no representation there |
 
-```bash
-git clone -b tlsa-cloudflare https://github.com/oscrx/external-dns.git
-cd external-dns && make build
-```
+"Not yet" means the blocker is external-dns's own code, not the protocol —
+nothing about these providers makes TLSA impossible, and adding one is usually
+small. Cloudflare needed a structured write path because its API models TLSA as
+fields rather than a string; a provider that already passes record types through
+opaquely may need nothing beyond the filter entry.
 
-The combination has been verified end to end against the Cloudflare API with a
-cert-manager certificate: one `CREATE`, no churn on subsequent syncs, and a DANE
-client validating the live endpoint.
+Records are still *created* on those providers — what fails is reading them
+back. external-dns then sees no existing state, so it re-creates on every sync
+and never updates or deletes.
 
-```
+One caveat on "not yet": the DNS service has to support TLSA too. Route53 and
+Azure DNS do not offer the record type at all, so no amount of external-dns work
+would help there. Check your provider's supported types before filing an issue
+against external-dns.
+
+Cloudflare has been verified end to end against the live API with a cert-manager
+certificate: one `CREATE`, no churn on subsequent syncs, and a DANE client
+validating the endpoint.
+
+```sh
+$ openssl s_client -connect oscarr.nl:443 -dane_tlsa_domain oscarr.nl \
+    -dane_tlsa_rrdata "3 1 1 54ee30e7...caa15e15820f"
 Verification: OK
-DANE TLSA 3 1 1 ...caa15e15820f matched the EE certificate at depth 0
+DANE TLSA 3 1 1 ...207258072299caa15e15820f matched the EE certificate at depth 0
 Verify return code: 0 (ok)
 ```
 
-### Ownership does not round-trip (all providers)
+That is the check to run against your own endpoint. `-dane_tlsa_rrdata` takes
+the record data exactly as published, and a match at depth 0 means a DANE client
+would accept the certificate your server actually serves. For a mail host, add
+`-starttls smtp` and use port 25.
 
-Fixed by [#6616](https://github.com/kubernetes-sigs/external-dns/pull/6616);
-present on a stock build.
+### Cloudflare: proxied records make DANE meaningless
 
-external-dns's TXT registry will create an ownership record for a TLSA endpoint
-but will not recognise it again.
+This one is independent of external-dns, and no patch changes it. If the A/AAAA
+record for the name is proxied — the orange cloud — clients complete TLS with
+**Cloudflare's edge certificate**, not your origin's. A `DANE-EE` record pinning
+your cert-manager certificate would then never match what a client actually sees,
+and DANE validation fails for everyone who checks.
 
-`registry/mapper` writes the ownership TXT generically — `ToTXTName` yields
-`tlsa-_443._tcp.example.com` with no changes needed. But the reverse direction,
-`ToEndpointName` → `dropAffixExtractType` → `extractRecordTypeDefaultPosition`,
-matches the leading token against a hardcoded `supportedRecords` list that omits
-TLSA. Round-tripping `tlsa-_443._tcp.example.com` returns the name unstripped and
-an empty record type:
+- **SMTP (25, 465, 587): fine.** Cloudflare does not proxy SMTP; those names are
+  DNS-only and clients reach your MTA directly. This is the case DANE is mostly
+  deployed for, and the one this controller is most useful for.
+- **HTTPS behind the proxy: do not do this.** Turn the proxy off for that name,
+  or do not publish TLSA records for it.
 
+Separately, external-dns omits TLSA from `recordTypeProxyNotSupported`, so with
+`--cloudflare-proxied` it will try to create TLSA records with `proxied=true` and
+Cloudflare will reject them. Work around it from this side, on any build:
+
+```sh
+--provider-specific=external-dns.kubernetes.io/cloudflare-proxied=false
 ```
+
+(Match external-dns's own `--annotation-prefix` if you have changed it.)
+
+<details>
+<summary><b>Why external-dns before v0.23.0 drops TLSA — the detail</b></summary>
+
+All of the following describes external-dns **before v0.23.0**. Useful if you
+are stuck on an older version and diagnosing what you see.
+
+**Reads are filtered.** `provider/recordfilter.go` allows only
+`A, AAAA, CNAME, DNAME, SRV, TXT, NS`. Providers filter reads through it, so
+TLSA records are dropped on the way back in. Without reads, external-dns sees no
+existing state: it attempts a create on every sync and never updates or deletes
+correctly. This is still true on v0.23.0 for every provider that uses the shared
+filter — Cloudflare is exempt because it overrides it.
+
+**Ownership did not round-trip (all providers).** Fixed globally in v0.23.0. external-dns's TXT registry
+will create an ownership record for a TLSA endpoint but will not recognise it
+again. `registry/mapper` writes the ownership TXT generically — `ToTXTName`
+yields `tlsa-_443._tcp.example.com` with no changes needed. But the reverse
+direction, `ToEndpointName` → `dropAffixExtractType` →
+`extractRecordTypeDefaultPosition`, matches the leading token against a hardcoded
+`supportedRecords` list that omits TLSA:
+
+```txt
 A     write=a-_443._tcp.example.com      read back  name="_443._tcp.example.com"      type="A"
 SRV   write=srv-_443._tcp.example.com    read back  name="_443._tcp.example.com"      type="SRV"
 TLSA  write=tlsa-_443._tcp.example.com   read back  name="tlsa-_443._tcp.example.com" type=""
@@ -128,63 +229,18 @@ The consequence is the failure mode described in
 records get created, external-dns never acknowledges ownership of them, and it
 therefore never updates or deletes them — leaving the ownership TXT orphaned in
 the zone forever. The fix is one line, adding TLSA to `supportedRecords` in
-`registry/mapper/mapper.go`, and it applies to every provider rather than just
-Cloudflare.
+`registry/mapper/mapper.go`.
 
-### The provider caveat
+**Cloudflare needs a structured write path.** Cloudflare models TLSA like SRV:
+`TLSARecordParam` in cloudflare-go has **no `Content` field at all**, only
+`Data{Usage, Selector, MatchingType, Certificate}`, and the read-side `Content`
+is documented as "Formatted TLSA content. See 'data' to set TLSA properties."
+external-dns already special-cases exactly this for SRV, in
+`buildSRVRecordParam` (batch path) and `getCreateDNSRecordParam` (single path);
+#6616 adds a `buildTLSARecordParam` alongside them, parsing `"3 1 1 <hex>"` into
+the four fields. Without it the write is attempted and Cloudflare answers:
 
-TLSA is also not in external-dns's supported record types, and what that costs
-you depends on the provider.
-
-`provider/recordfilter.go` allows only `A, AAAA, CNAME, SRV, TXT, NS`. Providers
-filter reads through it, so TLSA records are dropped on the way back in. Without
-reads, external-dns sees no existing state: it attempts a create on every sync
-and never updates or deletes correctly.
-
-**Cloudflare needs more than a read-path fix.** See the section below.
-
-Verify against your provider before relying on this.
-
-### Cloudflare
-
-Four separate things need attention. Items 1–3 are fixed by
-[#6616](https://github.com/kubernetes-sigs/external-dns/pull/6616); item 4 is
-worked around from this side regardless of which external-dns build you run.
-
-1. **Reads are filtered.** `groupByNameAndTypeWithCustomHostnames` skips any type
-   `SupportedAdditionalRecordTypes` rejects, and that falls through to the shared
-   `provider.SupportedRecordType`, which excludes TLSA. Fix: add TLSA there, or
-   to Cloudflare's own list next to MX.
-
-2. **Writes need structured `data`, not `content`.** Cloudflare models TLSA like
-   SRV: `TLSARecordParam` in cloudflare-go has **no `Content` field at all**,
-   only `Data{Usage, Selector, MatchingType, Certificate}`, and the read-side
-   `Content` is documented as "Formatted TLSA content. See 'data' to set TLSA
-   properties." external-dns already special-cases exactly this for SRV, in
-   `buildSRVRecordParam` (batch path) and `getCreateDNSRecordParam` (single
-   path); `#6616` adds a `buildTLSARecordParam` alongside them, parsing
-   `"3 1 1 <hex>"` into the four fields.
-
-3. **Record identity comes from `Content`.** `newDNSRecordIndex` keys records on
-   `endpointTargetFromCloudflareRecord`, which returns `record.Content` for
-   everything except SRV, where it re-renders from `Data`. TLSA needs the same
-   treatment, otherwise whatever formatting Cloudflare chooses for the rendered
-   `content` (hex case, spacing) has to match ours exactly or every sync sees a
-   spurious diff and churns.
-
-4. **Proxying.** TLSA is missing from `recordTypeProxyNotSupported`, so with
-   `--cloudflare-proxied` external-dns will try to create TLSA records with
-   `proxied=true` and Cloudflare will reject them. Work around it from this side:
-
-   ```
-   --provider-specific=external-dns.kubernetes.io/cloudflare-proxied=false
-   ```
-
-   (Match external-dns's own `--annotation-prefix` if you have changed it.)
-
-Item 2 is not a guess. A stock build attempts the write and Cloudflare answers:
-
-```
+```txt
 400 Bad Request
   "usage is a required data field."
   "selector is a required data field."
@@ -192,36 +248,21 @@ Item 2 is not a guess. A stock build attempts the write and Cloudflare answers:
   "certificate is a required data field."
 ```
 
-Item 3 is likewise observable: Cloudflare returns the record as
-`3 1 1 54EE30E7...CAA1 5E15820F` — uppercase, with embedded whitespace — while
-external-dns writes lowercase and contiguous. Without normalising reads back
-through the same parser, every sync sees a difference and issues a redundant
-update forever.
+**Cloudflare record identity comes from `Content`.** `newDNSRecordIndex` keys
+records on `endpointTargetFromCloudflareRecord`, which returns `record.Content`
+for everything except SRV, where it re-renders from `Data`. TLSA needs the same
+treatment. Cloudflare returns the record as `3 1 1 54EE30E7...CAA1 5E15820F` —
+uppercase, with embedded whitespace — while external-dns writes lowercase and
+contiguous. Without normalising reads back through the same parser, every sync
+sees a difference and issues a redundant update forever.
 
-[#6616](https://github.com/kubernetes-sigs/external-dns/pull/6616) implements
-1–3 plus the registry fix, modelled on the SRV handling that already solves the
-same problem: each `if type == SRV` becomes a `switch` with a TLSA case. That
-shape matters beyond TLSA, because thirteen Cloudflare record types are
-`data`-only on write (CAA, CERT, DNSKEY, DS, HTTPS, LOC, NAPTR, SMIMEA, SRV,
+#6616 implements all of the above, modelled on the SRV handling that already
+solves the same problem: each `if type == SRV` becomes a `switch` with a TLSA
+case. That shape matters beyond TLSA, because thirteen Cloudflare record types
+are `data`-only on write (CAA, CERT, DNSKEY, DS, HTTPS, LOC, NAPTR, SMIMEA, SRV,
 SSHFP, SVCB, TLSA, URI) and external-dns handles one of them today.
 
-#### Proxied records make DANE meaningless
-
-Independent of external-dns: if the A/AAAA record for the name is proxied — the
-orange cloud — clients complete TLS with **Cloudflare's edge certificate**, not
-your origin's. A `DANE-EE` record pinning your cert-manager certificate would
-then never match what a client actually sees, and DANE validation fails for
-everyone who checks.
-
-- **SMTP (25, 465, 587): fine.** Cloudflare does not proxy SMTP; those names are
-  DNS-only and clients reach your MTA directly. This is the case DANE is mostly
-  deployed for, and the one this controller is most useful for.
-- **HTTPS behind the proxy: do not do this.** Turn the proxy off for that name,
-  or do not publish TLSA records for it.
-
-Also: enable DNSSEC on the zone (Cloudflare supports it, but you must add the DS
-record at your registrar). Without DNSSEC, TLSA records authenticate nothing.
-Nothing here checks that for you.
+</details>
 
 ## Installation
 
@@ -265,7 +306,7 @@ Annotations on the Certificate. Prefix is `tlsa.oscarr.nl` by default; change it
 with `--annotation-prefix`.
 
 | Annotation | Default | Meaning |
-|---|---|---|
+| --- | --- | --- |
 | `enabled` | *(required)* | Must be `"true"`. Nothing happens without it. |
 | `ports` | `443` | Comma-separated ports, e.g. `"25,465,587"`. |
 | `protocol` | `tcp` | `tcp`, `udp` or `sctp`. |
@@ -285,9 +326,9 @@ withdrawing them.
 ### Flags
 
 | Flag | Default | Meaning |
-|---|---|---|
+| --- | --- | --- |
 | `--annotation-prefix` | `tlsa.oscarr.nl` | Annotation domain prefix. |
-| `--provider-specific` | *(none)* | `key=value` passed to the external-dns provider on every record. Repeatable. See [Cloudflare](#cloudflare). |
+| `--provider-specific` | *(none)* | `key=value` passed to the external-dns provider on every record. Repeatable. See [Cloudflare](#cloudflare-proxied-records-make-dane-meaningless). |
 | `--rollover-grace` | `168h` | How long a superseded record stays published. |
 | `--resync-period` | `1h` | Full reconcile interval absent watch events. |
 | `--namespace` | *(all)* | Restrict to one namespace. |
@@ -316,12 +357,21 @@ spec:
 Produces `_25._tcp.mail.example.com`, `_465._tcp.…` and `_587._tcp.…`, each
 `TLSA 3 1 1 <sha256 of the SPKI>`. More in [examples/](examples/).
 
-Verify what landed:
+## Troubleshooting
 
-```bash
-kubectl get dnsendpoint mail-tlsa -o yaml
-dig +dnssec TLSA _25._tcp.mail.example.com
-```
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| No `DNSEndpoint` is created | Certificate not opted in, or prefix mismatch | Set `<prefix>/enabled: "true"`; check `--annotation-prefix` matches the annotation you used |
+| `DNSEndpoint` exists, but no DNS records | external-dns is ignoring TLSA | Add `--managed-record-types=TLSA` and `--source=crd` to external-dns |
+| `400` — "usage is a required data field" | external-dns older than v0.23.0 cannot write TLSA on Cloudflare | Upgrade external-dns to v0.23.0 or later |
+| Cloudflare rejects the create as proxied | TLSA missing from external-dns's non-proxyable list | `--provider-specific=external-dns.kubernetes.io/cloudflare-proxied=false` |
+| external-dns updates the same record every sync | Reads are filtered, so it never sees existing state | Only Cloudflare and PowerDNS read TLSA back — see [Provider support](#provider-support) |
+| Ownership TXT `tlsa-…` left orphaned; records never updated or deleted | Registry cannot round-trip the TLSA prefix | Upgrade external-dns to v0.23.0 or later |
+| `TLSAConfigInvalid` warning event | Malformed annotation value | Fix the value; nothing is published until it parses |
+| `TLSANameSkipped` warning event | Wildcard DNS name | Expected — use `dns-names` to select concrete names |
+| `TLSADataUnavailable` warning event | `DANE-TA`/`PKIX-TA` with no intermediate in `tls.crt` or `ca.crt` | Use `DANE-EE`, or issue a chain that includes one |
+| No events from the controller at all | RBAC missing the `events.k8s.io` group | Upgrade to 0.2.4 or later |
+| Record resolves but DANE validation fails | Name is proxied (edge cert), or the zone is not DNSSEC-signed | Turn the proxy off for that name; add the DS record at your registrar |
 
 ## Behaviour notes
 
