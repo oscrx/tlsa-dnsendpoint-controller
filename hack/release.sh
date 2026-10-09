@@ -33,6 +33,10 @@ files=("$chart" deploy/deployment.yaml README.md charts/tlsa-dnsendpoint-control
 count() { cat "${files[@]}" | grep -cE -- "$1" || true; }
 want=$(count "(version:|appVersion:|--version|:)\"?${o}")
 
+# Anything failing before the commit leaves the tree as it was found.
+committed=
+trap '[ -n "$committed" ] || git checkout -- "${files[@]}"' EXIT
+
 # Only the install commands and image tags; prose such as "upgrade to 0.2.4 or
 # later" names the release a fix shipped in and must not move.
 sed -i.bak -e "s/^version: ${o}\$/version: ${new}/" \
@@ -46,7 +50,6 @@ rm -f "$chart.bak" deploy/deployment.yaml.bak README.md.bak charts/tlsa-dnsendpo
 got=$(count "(version:|appVersion:|--version|:)\"?${new//./\\.}")
 if [ "$got" != "$want" ]; then
   echo "expected ${want} references to move to ${new}, found ${got}; check the sed patterns" >&2
-  git checkout -- "${files[@]}"
   exit 1
 fi
 
@@ -55,6 +58,7 @@ make verify
 
 git commit -q -am "chore(release): ${new}" \
   -m "Chart version, appVersion, and the image tags and install commands in the manifests and READMEs."
+committed=1
 git tag -s "v${new}" -m "v${new}"
 
 echo

@@ -16,7 +16,22 @@
   ],
   "platformAutomerge": true,
   "postUpdateOptions": ["gomodTidy"],
+  "customManagers": [
+    {
+      "description": "make lint pins the same golangci-lint as ci.yaml.",
+      "customType": "regex",
+      "managerFilePatterns": ["/^Makefile$/"],
+      "matchStrings": ["GOLANGCI_LINT_VERSION \\?= (?<currentValue>v\\S+)"],
+      "depNameTemplate": "golangci/golangci-lint",
+      "datasourceTemplate": "github-releases"
+    }
+  ],
   "packageRules": [
+    {
+      "description": "Move golangci-lint in ci.yaml and the Makefile together, so local lint and CI never disagree.",
+      "groupName": "golangci-lint",
+      "matchPackageNames": ["golangci/golangci-lint"]
+    },
     {
       "description": "The Kubernetes libraries are released together and will not compile apart, so update them as one PR.",
       "groupName": "kubernetes",

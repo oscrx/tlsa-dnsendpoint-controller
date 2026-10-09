@@ -30,9 +30,14 @@ fmt: ## Format the code
 vet: ## Run go vet
 	go vet ./...
 
+# Built from source with this repo's toolchain, as CI does: a prebuilt binary
+# compiled with an older Go cannot read the standard library of a newer one.
+# Renovate keeps this in step with the version in ci.yaml.
+GOLANGCI_LINT_VERSION ?= v2.14.0
+
 .PHONY: lint
 lint: ## Run golangci-lint
-	golangci-lint run --timeout=5m ./...
+	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) run --timeout=5m ./...
 
 .PHONY: verify
 verify: vet lint test chart.verify ## Everything CI runs
