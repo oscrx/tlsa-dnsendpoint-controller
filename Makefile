@@ -78,3 +78,7 @@ chart.verify: chart.lint ## Lint, render and schema-validate the chart
 .PHONY: chart.package
 chart.package: ## Package the chart into dist/
 	helm package $(CHART) --destination dist
+
+.PHONY: release
+release: ## Bump, verify, commit and tag a release: make release VERSION=x.y.z
+	hack/release.sh $(VERSION)

@@ -416,6 +416,16 @@ build to catch cross-compilation breakage. Images are published only from
 `release.yaml`, on a `v*` tag or a manual dispatch: multi-arch, with provenance,
 an SBOM, and a keyless cosign signature.
 
+To cut a release from a clean `main`:
+
+```bash
+make release VERSION=x.y.z   # bump versions, verify, commit, signed tag
+git push origin main vx.y.z
+```
+
+The tag publishes the image and chart, then creates the GitHub release with
+generated notes.
+
 ### Tests
 
 The TLSA digests in `internal/tlsa/testdata` are asserted against values
