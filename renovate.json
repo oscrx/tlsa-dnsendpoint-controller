@@ -28,6 +28,18 @@
   ],
   "packageRules": [
     {
+      "description": "The go.mod toolchain is what CI tests with and the golang image is what the release compiles with, so they move in one PR. make toolchain.verify fails the PR until both have landed in it.",
+      "groupName": "go",
+      "matchManagers": ["gomod"],
+      "matchDepTypes": ["toolchain"]
+    },
+    {
+      "description": "See the go group above.",
+      "groupName": "go",
+      "matchManagers": ["dockerfile"],
+      "matchPackageNames": ["golang"]
+    },
+    {
       "description": "Move golangci-lint in ci.yaml and the Makefile together, so local lint and CI never disagree.",
       "groupName": "golangci-lint",
       "matchPackageNames": ["golangci/golangci-lint"]

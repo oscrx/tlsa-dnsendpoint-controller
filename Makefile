@@ -40,7 +40,18 @@ lint: ## Run golangci-lint
 	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) run --timeout=5m ./...
 
 .PHONY: verify
-verify: vet lint test chart.verify ## Everything CI runs
+verify: toolchain.verify vet lint test chart.verify ## Everything CI runs
+
+# The image must compile with the Go the tests ran on. Renovate groups the two,
+# but the golang image is often published after the toolchain, so this keeps a
+# toolchain-only PR red until the image catches up.
+.PHONY: toolchain.verify
+toolchain.verify: ## Check the Dockerfile's Go matches go.mod's toolchain
+	@want=$$(awk '$$1=="toolchain"{sub("go","",$$2); print $$2}' go.mod); \
+	got=$$(sed -nE 's|.*golang:([0-9.]+)@.*|\1|p' Dockerfile); \
+	if [ -z "$$want" ] || [ "$$want" != "$$got" ]; then \
+		echo "go.mod toolchain is $$want but the Dockerfile builds with golang:$$got"; exit 1; \
+	fi
 
 .PHONY: image
 image: ## Build a single-platform image for the host
