@@ -115,7 +115,7 @@ Retirement state is tracked in an annotation on the `DNSEndpoint`.
 |---|---|---|
 | Kubernetes | ≥ 1.25 | The chart declares `kubeVersion: ">=1.25.0-0"`. |
 | cert-manager | any recent release | Uses the `cert-manager.io/v1` `Certificate` API. |
-| external-dns | **≥ v0.23.0** | TLSA support landed in [#6616](https://github.com/kubernetes-sigs/external-dns/pull/6616). Must run `--source=crd --managed-record-types=TLSA`. See [Provider support](#provider-support). |
+| external-dns | **≥ v0.23.0** | TLSA support landed in [#6616](https://github.com/kubernetes-sigs/external-dns/pull/6616). rfc2136 needs ≥ v0.24.0 ([#6721](https://github.com/kubernetes-sigs/external-dns/pull/6721)). Must run `--source=crd --managed-record-types=TLSA`. See [Provider support](#provider-support). |
 | `DNSEndpoint` CRD | `externaldns.k8s.io/v1alpha1` | The official external-dns Helm chart installs it automatically. Other install methods may not — check with `kubectl get crd dnsendpoints.externaldns.k8s.io`. |
 
 DNSSEC must be enabled on the zone. Without it, DANE authenticates nothing —
@@ -126,17 +126,20 @@ and nothing here checks that for you.
 TLSA reached external-dns in
 [#6616](https://github.com/kubernetes-sigs/external-dns/pull/6616), released in
 **v0.23.0** — but that fix is narrower than "external-dns supports TLSA now".
-The shared read filter in `provider/recordfilter.go` still allows only
+rfc2136 followed in
+[#6721](https://github.com/kubernetes-sigs/external-dns/pull/6721), released in
+**v0.24.0** — thanks to [Marc Schmitt (@rissson)](https://github.com/rissson)
+for that. The shared read filter in `provider/recordfilter.go` still allows only
 `A, AAAA, CNAME, DNAME, SRV, TXT, NS`. Cloudflare works because it overrides
-that filter for itself. Any provider using the shared filter unchanged still
+that filter for itself, and rfc2136 has its own read switch. Any provider using the shared filter unchanged still
 drops TLSA records when reading the zone back.
 
-| Provider | TLSA on v0.23.0 | Why |
+| Provider | TLSA support | Why |
 |---|---|---|
-| **Cloudflare** | **Works** — verified end to end | Overrides the shared filter, and #6616 added its structured write path |
-| **PowerDNS** | **Should work** — untested | Passes the record type through as an opaque string on read and write, with no allowlist |
+| **Cloudflare** | **Works** from v0.23.0 — verified end to end | Overrides the shared filter, and #6616 added its structured write path |
+| **PowerDNS** | **Should work** from v0.23.0 — untested | Passes the record type through as an opaque string on read and write, with no allowlist |
 | **Webhook providers** | Depends on the provider | external-dns applies no type filter of its own; behaviour is entirely the out-of-tree provider's |
-| **rfc2136** | Not yet | Writes succeed via `dns.NewRR`, but its own read switch silently drops any type it does not name |
+| **rfc2136** | **Works** from v0.24.0 — verified end to end | [#6721](https://github.com/kubernetes-sigs/external-dns/pull/6721) added TLSA to its read switch and canonicalises targets, so case differences in the hex do not cause churn |
 | Route53, Azure, Google Cloud DNS, Alibaba Cloud, Civo, DNSimple, GoDaddy, Linode, NS1, OCI, OVH, Scaleway | Not yet | Use the shared filter. Several add MX or NAPTR for themselves; none add TLSA |
 | CoreDNS, Pi-hole, Exoscale | Not yet | Handle a small fixed set of types in their own code, roughly A/AAAA/CNAME/TXT |
 | AWS Cloud Map | No | Service discovery rather than a DNS zone API; TLSA has no representation there |
@@ -159,6 +162,10 @@ against external-dns.
 Cloudflare has been verified end to end against the live API with a cert-manager
 certificate: one `CREATE`, no churn on subsequent syncs, and a DANE client
 validating the endpoint.
+
+rfc2136 has been verified the same way on v0.24.0 against Knot with DNSSEC:
+no churn, the new hash pre-published on key rotation, records withdrawn when
+the opt-in is removed, and DANE validated by both OpenSSL and ldns.
 
 ```sh
 $ openssl s_client -connect oscarr.nl:443 -dane_tlsa_domain oscarr.nl \

@@ -17,7 +17,7 @@ helm install tlsa oci://ghcr.io/oscrx/charts/tlsa-dnsendpoint-controller \
 | --- | --- | --- |
 | Kubernetes | ≥ 1.25 | Declared as `kubeVersion` in `Chart.yaml`. |
 | cert-manager | any recent release | Uses the `cert-manager.io/v1` `Certificate` API. |
-| external-dns | **≥ v0.23.0** | TLSA support landed in [external-dns#6616](https://github.com/kubernetes-sigs/external-dns/pull/6616). Earlier versions cannot read TLSA records back, and on Cloudflare reject writes with `usage is a required data field`. |
+| external-dns | **≥ v0.23.0** | TLSA support landed in [external-dns#6616](https://github.com/kubernetes-sigs/external-dns/pull/6616). Earlier versions cannot read TLSA records back, and on Cloudflare reject writes with `usage is a required data field`. rfc2136 needs ≥ v0.24.0 ([external-dns#6721](https://github.com/kubernetes-sigs/external-dns/pull/6721)). |
 | `DNSEndpoint` CRD | `externaldns.k8s.io/v1alpha1` | Installed automatically by the official external-dns Helm chart. Other install methods may not — check with `kubectl get crd dnsendpoints.externaldns.k8s.io`. |
 
 external-dns must run with `--source=crd` **and `--managed-record-types=TLSA`**.
