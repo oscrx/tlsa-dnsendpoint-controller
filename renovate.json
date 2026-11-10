@@ -37,7 +37,7 @@
       "description": "See the go group above.",
       "groupName": "go",
       "matchManagers": ["dockerfile"],
-      "matchPackageNames": ["golang"]
+      "matchPackageNames": ["golang", "docker.io/library/golang"]
     },
     {
       "description": "Move golangci-lint in ci.yaml and the Makefile together, so local lint and CI never disagree.",
